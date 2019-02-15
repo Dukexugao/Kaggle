@@ -1,0 +1,116 @@
+
+
+import sys
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import base64 as b    
+import pymysql
+import pyodbc as db
+import os
+
+train = pd.read_csv('file:///C:/Users/xgao/Downloads/train.csv')
+
+y_actual = train['target']
+y_predicted = pd.DataFrame(0, index=np.arange(201917), columns = np.arange(1))
+
+from sklearn.metrics import mean_squared_error
+from math import sqrt
+
+rms = sqrt(mean_squared_error(y_actual, y_predicted))
+
+train.hist(column = 'target')
+
+train['target2'] = np.where(train['target']< -20,1,0)
+
+train.dtypes
+train['first_active_month'] = pd.to_datetime(train['first_active_month'])
+train['Mosa'] = ((pd.to_datetime('today') - train['first_active_month'])/np.timedelta64(1, 'M')).astype(int)
+train = train.drop(['first_active_month'], axis = 1)
+
+ 
+df = train
+del train
+import sklearn
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import Imputer
+from sklearn.metrics import roc_auc_score
+
+def load_dataset():
+    import scipy.io as scio
+    data = df
+    train_payer = data['target2']
+    train = data.drop(['card_id','target'],axis=1)
+    imp = sklearn.preprocessing.Imputer()
+    imp.fit(train)
+    train = imp.transform(train)
+    X_train,X_test,y_train,y_test = train_test_split( train, train_payer, test_size=0.3, random_state=42)
+
+    return X_train, X_test, y_train, y_test
+
+X_train, X_test, y_train, y_test = load_dataset()
+
+def my_confusion_matrix(y_true, y_pred):
+    from sklearn.metrics import confusion_matrix
+    labels = list(set(y_true))
+    conf_mat = confusion_matrix(y_true, y_pred, labels=labels)
+    print("confusion_matrix(left labels: y_true, up labels: y_pred):\n",conf_mat)
+
+def my_classification_report(y_true, y_pred):
+    from sklearn.metrics import classification_report
+    print("classification_report(left: labels):")
+    print(classification_report(y_true, y_pred))
+
+
+def clf_train(x_train, y_train):
+    #from sklearn import svm
+    
+    #clf = svm.SVC(C=10, kernel="rbf", gamma=0.5)
+    #clf = svm.SVC(C=10, kernel="rbf", gamma=0.05)
+    #clf = svm.SVC(C=1000, kernel="linear", gamma=0.1)
+    #clf.fit(x_train, y_train)
+    
+    #from sklearn.linear_model import LogisticRegression
+    #clf = LogisticRegression(penalty='l2', solver='liblinear')
+    
+    #from sklearn.ensemble import GradientBoostingClassifier
+    #clf = GradientBoostingClassifier(learning_rate=0.1, n_estimators=50,max_depth=10, min_samples_split=2, min_samples_leaf=2, subsample=0.8,max_features='sqrt', random_state=10)
+    #clf = GradientBoostingClassifier(learning_rate=0.05, n_estimators=50, max_depth=20, min_samples_split=5, min_samples_leaf=1, subsample=1,max_features='sqrt', random_state=10)
+    ##random forest
+    from sklearn.ensemble import RandomForestClassifier
+    clf = RandomForestClassifier(n_estimators=20, criterion='gini', max_features = 5, bootstrap = False, random_state= 0)
+    #clf.fit(x_train, y_train)
+    
+    ##neural network
+    #from sklearn.neural_network import MLPClassifier
+    #clf = MLPClassifier(solver = 'lbfgs', alpha = 0.1, hidden_layer_sizes = (8,1), random_state = 3)
+    clf.fit(x_train, y_train)
+    
+    return clf
+
+
+clf = clf_train(X_train, y_train)
+
+print("Training:\n")
+y_pred = clf.predict(X_train)
+my_confusion_matrix(y_train, y_pred)
+my_classification_report(y_train, y_pred)
+print("Testing:\n")
+y_pred2 = clf.predict(X_test)
+my_confusion_matrix(y_test, y_pred2)
+my_classification_report(y_test, y_pred2)
+
+
+X_train1,X_test1,y_train1,y_test1 = train_test_split( df.drop(['card_id','target2'],axis=1), df['target'], test_size=0.3, random_state=42)
+te = pd.DataFrame(y_pred2)
+
+te.columns
+te.rename(columns={0:'uio'}, inplace=True)
+te['new'] = np.where(te['uio']==0,0,-33.2)
+rms1 = sqrt(mean_squared_error(y_test1, te['new']))
+
+
+df['label'] = np.where(df['target']==-33.21928095,-33.2,0)
+rms2 = sqrt(mean_squared_error (df['target'], df['label']))
+
